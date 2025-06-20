@@ -247,94 +247,155 @@ func generateUnifiedDiff(file1, file2 string, lines1, lines2 []string, config Co
 }
 
 func generateHunks(lines1, lines2 []string, context int) [][]string {
+	edits := computeDiff(lines1, lines2)
+	return createHunksFromEdits(lines1, lines2, edits, context)
+}
+
+type Edit struct {
+	Type   string // "equal", "delete", "insert"
+	Start1 int
+	End1   int
+	Start2 int
+	End2   int
+}
+
+func computeDiff(lines1, lines2 []string) []Edit {
+	n, m := len(lines1), len(lines2)
+	
+	// Use simple O(n*m) algorithm for reasonable performance
+	dp := make([][]int, n+1)
+	for i := range dp {
+		dp[i] = make([]int, m+1)
+	}
+	
+	// Fill DP table
+	for i := 1; i <= n; i++ {
+		for j := 1; j <= m; j++ {
+			if lines1[i-1] == lines2[j-1] {
+				dp[i][j] = dp[i-1][j-1] + 1
+			} else {
+				dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+			}
+		}
+	}
+	
+	// Backtrack to find edits
+	var edits []Edit
+	i, j := n, m
+	
+	for i > 0 || j > 0 {
+		if i > 0 && j > 0 && lines1[i-1] == lines2[j-1] {
+			// Equal
+			start1, start2 := i-1, j-1
+			for i > 0 && j > 0 && lines1[i-1] == lines2[j-1] {
+				i--
+				j--
+			}
+			edits = append([]Edit{{Type: "equal", Start1: i, End1: start1 + 1, Start2: j, End2: start2 + 1}}, edits...)
+		} else if i > 0 && (j == 0 || dp[i-1][j] >= dp[i][j-1]) {
+			// Delete
+			start1 := i - 1
+			for i > 0 && (j == 0 || dp[i-1][j] >= dp[i][j-1]) {
+				i--
+			}
+			edits = append([]Edit{{Type: "delete", Start1: i, End1: start1 + 1, Start2: j, End2: j}}, edits...)
+		} else {
+			// Insert
+			start2 := j - 1
+			for j > 0 && (i == 0 || dp[i-1][j] < dp[i][j-1]) {
+				j--
+			}
+			edits = append([]Edit{{Type: "insert", Start1: i, End1: i, Start2: j, End2: start2 + 1}}, edits...)
+		}
+	}
+	
+	return edits
+}
+
+func createHunksFromEdits(lines1, lines2 []string, edits []Edit, context int) [][]string {
 	var hunks [][]string
 	
-	i, j := 0, 0
-	for {
-		startI := i
-		
-		for i < len(lines1) && j < len(lines2) && lines1[i] == lines2[j] {
+	i := 0
+	for i < len(edits) {
+		// Skip equal sections until we find changes
+		for i < len(edits) && edits[i].Type == "equal" {
 			i++
-			j++
 		}
 		
-		if i >= len(lines1) && j >= len(lines2) {
+		if i >= len(edits) {
 			break
 		}
 		
-		deleteStart := i
-		for i < len(lines1) && (j >= len(lines2) || lines1[i] != lines2[j]) {
-			found := false
-			for k := j; k < len(lines2); k++ {
-				if lines1[i] == lines2[k] {
-					found = true
-					break
-				}
-			}
-			if !found {
-				i++
-			} else {
-				break
-			}
-		}
-		deleteEnd := i
+		// Found changes, create a hunk
+		hunkStart := i
 		
-		insertStart := j
-		for j < len(lines2) && (i >= len(lines1) || lines1[i] != lines2[j]) {
-			found := false
-			for k := i; k < len(lines1); k++ {
-				if lines2[j] == lines1[k] {
-					found = true
-					break
-				}
-			}
-			if !found {
-				j++
-			} else {
-				break
-			}
+		// Include changes until we have enough context
+		for i < len(edits) && (edits[i].Type != "equal" || (edits[i].End1-edits[i].Start1) < context*2) {
+			i++
 		}
-		insertEnd := j
 		
-		if deleteStart < deleteEnd || insertStart < insertEnd {
-			hunk := generateHunk(lines1, lines2, startI, deleteStart, deleteEnd, insertStart, insertEnd, context)
-			if len(hunk) > 0 {
-				hunks = append(hunks, hunk)
-			}
+		hunk := createSingleHunk(lines1, lines2, edits[hunkStart:i], context)
+		if len(hunk) > 0 {
+			hunks = append(hunks, hunk)
 		}
 	}
 	
 	return hunks
 }
 
-func generateHunk(lines1, lines2 []string, contextStart, deleteStart, deleteEnd, insertStart, insertEnd, context int) []string {
+func createSingleHunk(lines1, lines2 []string, edits []Edit, context int) []string {
+	if len(edits) == 0 {
+		return nil
+	}
+	
+	// Calculate hunk boundaries
+	start1 := edits[0].Start1
+	end1 := edits[len(edits)-1].End1
+	start2 := edits[0].Start2
+	end2 := edits[len(edits)-1].End2
+	
+	// Add context
+	contextStart1 := max(0, start1-context)
+	contextEnd1 := min(len(lines1), end1+context)
+	contextStart2 := max(0, start2-context)
+	contextEnd2 := min(len(lines2), end2+context)
+	
 	var hunk []string
+	hunk = append(hunk, fmt.Sprintf("@@ -%d,%d +%d,%d @@", 
+		contextStart1+1, contextEnd1-contextStart1,
+		contextStart2+1, contextEnd2-contextStart2))
 	
-	actualStart := max(0, deleteStart-context)
-	actualEnd1 := min(len(lines1), deleteEnd+context)
-	actualEnd2 := min(len(lines2), insertEnd+context)
-	
-	hunkStart1 := actualStart + 1
-	hunkLen1 := actualEnd1 - actualStart
-	hunkStart2 := insertStart - (deleteStart - actualStart) + 1
-	hunkLen2 := actualEnd2 - (insertStart - (deleteStart - actualStart))
-	
-	hunk = append(hunk, fmt.Sprintf("@@ -%d,%d +%d,%d @@", hunkStart1, hunkLen1, hunkStart2, hunkLen2))
-	
-	for i := actualStart; i < deleteStart; i++ {
+	// Add context before changes
+	for i := contextStart1; i < start1; i++ {
 		hunk = append(hunk, " "+lines1[i])
 	}
 	
-	for i := deleteStart; i < deleteEnd; i++ {
-		hunk = append(hunk, "-"+lines1[i])
+	// Add the changes
+	for _, edit := range edits {
+		switch edit.Type {
+		case "equal":
+			for i := edit.Start1; i < edit.End1; i++ {
+				hunk = append(hunk, " "+lines1[i])
+			}
+		case "delete":
+			for i := edit.Start1; i < edit.End1; i++ {
+				hunk = append(hunk, "-"+lines1[i])
+			}
+		case "insert":
+			for i := edit.Start2; i < edit.End2; i++ {
+				hunk = append(hunk, "+"+lines2[i])
+			}
+		}
 	}
 	
-	for i := insertStart; i < insertEnd; i++ {
-		hunk = append(hunk, "+"+lines2[i])
+	// Add context after changes
+	for i := end1; i < contextEnd1; i++ {
+		hunk = append(hunk, " "+lines1[i])
 	}
 	
 	return hunk
 }
+
 
 
 func max(a, b int) int {

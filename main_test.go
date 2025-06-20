@@ -165,19 +165,77 @@ func TestMaxMin(t *testing.T) {
 	}
 }
 
-func TestGenerateHunk(t *testing.T) {
+func TestGenerateHunks(t *testing.T) {
 	lines1 := []string{"line1", "line2", "line3", "line4", "line5"}
 	lines2 := []string{"line1", "modified2", "line3", "line4", "line5"}
 	
-	hunk := generateHunk(lines1, lines2, 0, 1, 2, 1, 2, 1)
+	hunks := generateHunks(lines1, lines2, 1)
 	
-	if len(hunk) == 0 {
+	if len(hunks) == 0 {
 		t.Error("Expected hunk output")
 	}
 	
-	hunkStr := strings.Join(hunk, "\n")
+	hunkStr := strings.Join(hunks[0], "\n")
 	if !strings.Contains(hunkStr, "@@") {
 		t.Error("Hunk should contain hunk header with @@")
+	}
+	if !strings.Contains(hunkStr, "-line2") {
+		t.Error("Hunk should show deleted line")
+	}
+	if !strings.Contains(hunkStr, "+modified2") {
+		t.Error("Hunk should show added line")
+	}
+}
+
+func TestLargeFileComparison(t *testing.T) {
+	config := Config{showContext: 3, showColors: false}
+	
+	// Test with larger files to check for performance issues
+	err := compareFiles("testdata/large_file1.txt", "testdata/large_file2.txt", config)
+	if err != nil {
+		t.Fatalf("Failed to compare large files: %v", err)
+	}
+}
+
+func TestCLILargeFileComparison(t *testing.T) {
+	// Set a timeout to catch hanging behavior
+	cmd := exec.Command("timeout", "30s", "./ddiff", "--color=false", "testdata/large_file1.txt", "testdata/large_file2.txt")
+	output, err := cmd.CombinedOutput()
+	
+	// If timeout command doesn't exist, fall back to regular command
+	if strings.Contains(string(output), "timeout: command not found") {
+		cmd = exec.Command("./ddiff", "--color=false", "testdata/large_file1.txt", "testdata/large_file2.txt")
+		output, err = cmd.CombinedOutput()
+	}
+	
+	if err != nil {
+		t.Logf("Output: %s", output)
+		t.Fatalf("CLI large file comparison failed or timed out: %v", err)
+	}
+	
+	outputStr := string(output)
+	if len(outputStr) == 0 {
+		t.Error("Expected some diff output for large files")
+	}
+	
+	// Should contain diff headers
+	if !strings.Contains(outputStr, "--- testdata/large_file1.txt") {
+		t.Error("CLI output should contain source file header")
+	}
+	if !strings.Contains(outputStr, "+++ testdata/large_file2.txt") {
+		t.Error("CLI output should contain target file header")
+	}
+}
+
+func BenchmarkLargeFileComparison(b *testing.B) {
+	config := Config{showContext: 3, showColors: false}
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := compareFiles("testdata/large_file1.txt", "testdata/large_file2.txt", config)
+		if err != nil {
+			b.Fatalf("Failed to compare large files: %v", err)
+		}
 	}
 }
 
