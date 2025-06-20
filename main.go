@@ -96,7 +96,7 @@ func compareFiles(file1, file2 string, config Config) error {
 	
 	diff := generateUnifiedDiff(file1, file2, content1, content2, config)
 	if len(diff) > 0 {
-		fmt.Print(strings.Join(diff, "\n") + "\n")
+		printDiff(diff, config)
 	}
 	
 	return nil
@@ -412,6 +412,43 @@ func min(a, b int) int {
 	return b
 }
 
+func printDiff(diff []string, config Config) {
+	for _, line := range diff {
+		if len(line) == 0 {
+			fmt.Println()
+			continue
+		}
+		
+		switch line[0] {
+		case '-':
+			if strings.HasPrefix(line, "---") {
+				// File header
+				printColor(config, "white", line+"\n")
+			} else {
+				// Deleted line
+				printColor(config, "red", line+"\n")
+			}
+		case '+':
+			if strings.HasPrefix(line, "+++") {
+				// File header
+				printColor(config, "white", line+"\n")
+			} else {
+				// Added line
+				printColor(config, "green", line+"\n")
+			}
+		case '@':
+			// Hunk header
+			printColor(config, "cyan", line+"\n")
+		case ' ':
+			// Context line
+			fmt.Println(line)
+		default:
+			// Other lines (shouldn't happen in normal diff)
+			fmt.Println(line)
+		}
+	}
+}
+
 func printColor(config Config, color, text string) {
 	if !config.showColors {
 		fmt.Print(text)
@@ -428,6 +465,10 @@ func printColor(config Config, color, text string) {
 		colorCode = "\033[33m"
 	case "blue":
 		colorCode = "\033[34m"
+	case "cyan":
+		colorCode = "\033[36m"
+	case "white":
+		colorCode = "\033[37m"
 	default:
 		colorCode = ""
 	}
