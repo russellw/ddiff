@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -450,7 +451,7 @@ func printDiff(diff []string, config Config) {
 }
 
 func printColor(config Config, color, text string) {
-	if !config.showColors {
+	if !config.showColors || !supportsColors() {
 		fmt.Print(text)
 		return
 	}
@@ -478,4 +479,42 @@ func printColor(config Config, color, text string) {
 	} else {
 		fmt.Print(text)
 	}
+}
+
+func supportsColors() bool {
+	// Check if running on Windows
+	if runtime.GOOS == "windows" {
+		return enableWindowsColors()
+	}
+	
+	// On Unix-like systems, check if stdout is a terminal
+	if term := os.Getenv("TERM"); term == "dumb" || term == "" {
+		return false
+	}
+	
+	// Check if stdout is a terminal (not redirected)
+	if fileInfo, _ := os.Stdout.Stat(); (fileInfo.Mode() & os.ModeCharDevice) == 0 {
+		return false
+	}
+	
+	return true
+}
+
+func enableWindowsColors() bool {
+	if runtime.GOOS != "windows" {
+		return true
+	}
+	
+	// Check for Windows Terminal or other modern terminals
+	if os.Getenv("WT_SESSION") != "" || os.Getenv("TERM_PROGRAM") != "" {
+		return true
+	}
+	
+	// Check for ConEmu or other ANSI-capable terminals
+	if os.Getenv("ConEmuANSI") == "ON" || os.Getenv("ANSICON") != "" {
+		return true
+	}
+	
+	// For older Windows versions, disable colors by default
+	return false
 }
