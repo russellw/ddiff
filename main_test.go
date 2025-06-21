@@ -249,7 +249,8 @@ func TestRecursiveDirectoryComparison(t *testing.T) {
 }
 
 func TestCLIRecursiveDirectoryComparison(t *testing.T) {
-	cmd := exec.Command("./ddiff", "--color=false", "--recursive", "testdata/deep1", "testdata/deep2")
+	// Test that recursive is now the default behavior
+	cmd := exec.Command("./ddiff", "--color=false", "testdata/deep1", "testdata/deep2")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("CLI recursive directory comparison failed: %v\nOutput: %s", err, output)
@@ -257,7 +258,7 @@ func TestCLIRecursiveDirectoryComparison(t *testing.T) {
 	
 	outputStr := string(output)
 	if !strings.Contains(outputStr, "src/models/user.go") {
-		t.Error("CLI output should show differences in nested files")
+		t.Error("CLI output should show differences in nested files by default")
 	}
 	if !strings.Contains(outputStr, "src/utils/helpers.go") {
 		t.Error("CLI output should show files only in deep2")
@@ -265,8 +266,8 @@ func TestCLIRecursiveDirectoryComparison(t *testing.T) {
 }
 
 func TestNonRecursiveVsRecursive(t *testing.T) {
-	// Test that non-recursive doesn't find nested files
-	cmd := exec.Command("./ddiff", "--color=false", "testdata/deep1", "testdata/deep2")
+	// Test that --recursive=false disables recursive behavior
+	cmd := exec.Command("./ddiff", "--color=false", "--recursive=false", "testdata/deep1", "testdata/deep2")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("CLI non-recursive comparison failed: %v\nOutput: %s", err, output)
@@ -280,8 +281,8 @@ func TestNonRecursiveVsRecursive(t *testing.T) {
 }
 
 func TestShortFlags(t *testing.T) {
-	// Test short flag equivalents
-	cmd := exec.Command("./ddiff", "-c=false", "-r", "testdata/deep1", "testdata/deep2")
+	// Test short flag equivalents (recursive is now default, so just test colors)
+	cmd := exec.Command("./ddiff", "-c=false", "testdata/deep1", "testdata/deep2")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("CLI short flags failed: %v\nOutput: %s", err, output)
