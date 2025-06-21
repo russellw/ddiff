@@ -132,8 +132,4 @@ The project includes comprehensive tests:
 
 ## License
 
-[Add your license here]
-
-## Contributing
-
-[Add contribution guidelines here]
+MIT License
