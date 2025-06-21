@@ -239,6 +239,46 @@ func BenchmarkLargeFileComparison(b *testing.B) {
 	}
 }
 
+func TestRecursiveDirectoryComparison(t *testing.T) {
+	config := Config{showContext: 3, showColors: false, recursive: true}
+	
+	err := compareDirs("testdata/deep1", "testdata/deep2", config)
+	if err != nil {
+		t.Fatalf("Failed to compare recursive directories: %v", err)
+	}
+}
+
+func TestCLIRecursiveDirectoryComparison(t *testing.T) {
+	cmd := exec.Command("./ddiff", "--color=false", "--recursive", "testdata/deep1", "testdata/deep2")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("CLI recursive directory comparison failed: %v\nOutput: %s", err, output)
+	}
+	
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "src/models/user.go") {
+		t.Error("CLI output should show differences in nested files")
+	}
+	if !strings.Contains(outputStr, "src/utils/helpers.go") {
+		t.Error("CLI output should show files only in deep2")
+	}
+}
+
+func TestNonRecursiveVsRecursive(t *testing.T) {
+	// Test that non-recursive doesn't find nested files
+	cmd := exec.Command("./ddiff", "--color=false", "testdata/deep1", "testdata/deep2")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("CLI non-recursive comparison failed: %v\nOutput: %s", err, output)
+	}
+	
+	outputStr := string(output)
+	// Non-recursive should not show nested file differences
+	if strings.Contains(outputStr, "src/models/user.go") {
+		t.Error("Non-recursive mode should not show nested file differences")
+	}
+}
+
 func init() {
 	if _, err := os.Stat("ddiff"); os.IsNotExist(err) {
 		cmd := exec.Command("go", "build", "-o", "ddiff")
