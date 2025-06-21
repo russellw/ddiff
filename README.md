@@ -2,6 +2,8 @@
 
 A fast, feature-rich command-line diff tool for comparing files and directories, similar to `git diff`.
 
+> **Note**: This project was created as a test/demonstration of [Claude Code](https://claude.ai/code) capabilities for building complete software projects with comprehensive testing and documentation.
+
 ## Features
 
 - **File and Directory Comparison**: Compare individual files or entire directory trees
