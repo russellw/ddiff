@@ -25,11 +25,17 @@ func main() {
 	config := Config{}
 	
 	flag.BoolVar(&config.showColors, "color", true, "Show colored output")
+	flag.BoolVar(&config.showColors, "c", true, "Show colored output (short)")
 	flag.IntVar(&config.showContext, "context", 3, "Number of context lines")
+	flag.IntVar(&config.showContext, "C", 3, "Number of context lines (short)")
 	flag.BoolVar(&config.recursive, "recursive", false, "Compare directories recursively")
+	flag.BoolVar(&config.recursive, "r", false, "Compare directories recursively (short)")
 	flag.BoolVar(&config.showBinary, "binary", false, "Show binary file differences")
+	flag.BoolVar(&config.showBinary, "b", false, "Show binary file differences (short)")
 	flag.BoolVar(&config.ignoreSpace, "ignore-space", false, "Ignore whitespace changes")
+	flag.BoolVar(&config.ignoreSpace, "w", false, "Ignore whitespace changes (short)")
 	flag.BoolVar(&config.showStats, "stats", false, "Show diff statistics")
+	flag.BoolVar(&config.showStats, "s", false, "Show diff statistics (short)")
 	
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] <file1|dir1> <file2|dir2>\n", os.Args[0])

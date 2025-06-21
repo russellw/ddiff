@@ -279,6 +279,20 @@ func TestNonRecursiveVsRecursive(t *testing.T) {
 	}
 }
 
+func TestShortFlags(t *testing.T) {
+	// Test short flag equivalents
+	cmd := exec.Command("./ddiff", "-c=false", "-r", "testdata/deep1", "testdata/deep2")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("CLI short flags failed: %v\nOutput: %s", err, output)
+	}
+	
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "src/models/user.go") {
+		t.Error("Short flags should work the same as long flags")
+	}
+}
+
 func init() {
 	if _, err := os.Stat("ddiff"); os.IsNotExist(err) {
 		cmd := exec.Command("go", "build", "-o", "ddiff")
