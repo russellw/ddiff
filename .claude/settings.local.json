@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./ddiff testdata/dir1/ testdata/dir2/)",
+      "Bash(go build:*)",
+      "Bash(ls:*)",
+      "Bash(./ddiff testdata/deep1/ testdata/deep2/)",
+      "Bash(./ddiff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": []
+  }
+}
