@@ -109,6 +109,32 @@ func compareFiles(file1, file2 string, config Config) error {
 	return nil
 }
 
+func compareFilesWithRelativePaths(file1, file2, relPath string, config Config) error {
+	content1, err := readFileLines(file1)
+	if err != nil {
+		return fmt.Errorf("reading %s: %v", file1, err)
+	}
+	
+	content2, err := readFileLines(file2)
+	if err != nil {
+		return fmt.Errorf("reading %s: %v", file2, err)
+	}
+	
+	if isBinary(content1) || isBinary(content2) {
+		if config.showBinary {
+			fmt.Printf("Binary files %s differ\n", relPath)
+		}
+		return nil
+	}
+	
+	diff := generateUnifiedDiff(relPath, relPath, content1, content2, config)
+	if len(diff) > 0 {
+		printDiff(diff, config)
+	}
+	
+	return nil
+}
+
 func compareDirs(dir1, dir2 string, config Config) error {
 	files1, err := getFileList(dir1, config.recursive)
 	if err != nil {
@@ -120,6 +146,17 @@ func compareDirs(dir1, dir2 string, config Config) error {
 		return fmt.Errorf("listing %s: %v", dir2, err)
 	}
 	
+	// Create sets for easier lookup
+	files1Set := make(map[string]bool)
+	for _, f := range files1 {
+		files1Set[f] = true
+	}
+	files2Set := make(map[string]bool)
+	for _, f := range files2 {
+		files2Set[f] = true
+	}
+	
+	// Get union of all files for processing
 	allFiles := make(map[string]bool)
 	for _, f := range files1 {
 		allFiles[f] = true
@@ -135,31 +172,35 @@ func compareDirs(dir1, dir2 string, config Config) error {
 	sort.Strings(sortedFiles)
 	
 	for _, relPath := range sortedFiles {
-		path1 := filepath.Join(dir1, relPath)
-		path2 := filepath.Join(dir2, relPath)
+		inDir1 := files1Set[relPath]
+		inDir2 := files2Set[relPath]
 		
-		info1, err1 := os.Stat(path1)
-		info2, err2 := os.Stat(path2)
-		
-		if err1 != nil && err2 != nil {
-			continue
-		} else if err1 != nil {
-			printColor(config, "green", fmt.Sprintf("+++ %s\n", path2))
-			continue
-		} else if err2 != nil {
-			printColor(config, "red", fmt.Sprintf("--- %s\n", path1))
-			continue
-		}
-		
-		if info1.IsDir() || info2.IsDir() {
-			continue
-		}
-		
-		if info1.Size() != info2.Size() || info1.ModTime() != info2.ModTime() {
-			err := compareFiles(path1, path2, config)
+		if inDir1 && inDir2 {
+			// File exists in both directories - compare them
+			path1 := filepath.Join(dir1, relPath)
+			path2 := filepath.Join(dir2, relPath)
+			
+			info1, err1 := os.Stat(path1)
+			info2, err2 := os.Stat(path2)
+			
+			if err1 != nil || err2 != nil {
+				continue
+			}
+			
+			if info1.IsDir() || info2.IsDir() {
+				continue
+			}
+			
+			err := compareFilesWithRelativePaths(path1, path2, relPath, config)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error comparing %s: %v\n", relPath, err)
 			}
+		} else if inDir1 {
+			// File only exists in dir1 - show as deletion
+			printColor(config, "red", fmt.Sprintf("--- %s\n", relPath))
+		} else if inDir2 {
+			// File only exists in dir2 - show as addition
+			printColor(config, "green", fmt.Sprintf("+++ %s\n", relPath))
 		}
 	}
 	
@@ -241,13 +282,16 @@ func getFileList(dir string, recursive bool) ([]string, error) {
 func generateUnifiedDiff(file1, file2 string, lines1, lines2 []string, config Config) []string {
 	var result []string
 	
-	result = append(result, fmt.Sprintf("--- %s", file1))
-	result = append(result, fmt.Sprintf("+++ %s", file2))
-	
 	hunks := generateHunks(lines1, lines2, config.showContext)
 	
-	for _, hunk := range hunks {
-		result = append(result, hunk...)
+	// Only add headers if there are actual differences
+	if len(hunks) > 0 {
+		result = append(result, fmt.Sprintf("--- %s", file1))
+		result = append(result, fmt.Sprintf("+++ %s", file2))
+		
+		for _, hunk := range hunks {
+			result = append(result, hunk...)
+		}
 	}
 	
 	return result
